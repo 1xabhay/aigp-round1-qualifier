@@ -1,7 +1,7 @@
 [project]
 name = "aigp-round1-qualifier"
 version = "0.1.0"
-description = "Physics-based autonomous pilot for the AI-GP Round 1 simulator qualifier."
+description = "AI-GP Round 1 qualifier pilot."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

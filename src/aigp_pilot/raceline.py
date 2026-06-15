@@ -1,19 +1,3 @@
-"""
-Race-line geometry + a physics-based time-optimal SPEED PROFILE.
-
-The path is a smooth Catmull-Rom spline through the gate centres. The speed
-profile is the classic F1 racing-line construction, derived from the drone's
-*physical* motion limits (not hand-tuned rules):
-
-  1. corner limit:  v(s) = sqrt(a_lat / curvature(s))   -- grip in the turns
-  2. forward pass:  can't accelerate faster than a_lon   -- power out
-  3. backward pass: must brake by a_brk BEFORE the corner -- brake in
-
-So: brake into a turn, slow at the apex, accelerate out -- all from a handful
-of measurable limits (a ~ g*tan(tilt); brake/accel from thrust authority).
-
-All functions are pure (no I/O), so they're unit-tested in isolation.
-"""
 from __future__ import annotations
 
 import math
@@ -26,10 +10,8 @@ def clamp(x: float, lo: float, hi: float) -> float:
 
 
 def catmull_rom(ctrl, n: int = 18):
-    """Dense polyline of a Catmull-Rom spline that passes THROUGH every control
-    point (a smooth curve threading the gate centres)."""
     pts = [np.asarray(p, dtype=float) for p in ctrl]
-    P = [pts[0]] + pts + [pts[-1]]          # pad the ends so every segment has neighbours
+    P = [pts[0]] + pts + [pts[-1]]
     out = []
     for i in range(1, len(P) - 2):
         p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
@@ -44,7 +26,6 @@ def catmull_rom(ctrl, n: int = 18):
 
 
 def arc_lengths(pts):
-    """Cumulative arc length at each polyline point (len == len(pts), starts 0)."""
     cum = [0.0]
     for i in range(len(pts) - 1):
         cum.append(cum[-1] + float(np.linalg.norm(pts[i + 1] - pts[i])))
@@ -52,7 +33,6 @@ def arc_lengths(pts):
 
 
 def project_arc(pts, cum, pos) -> float:
-    """Arc length along the path of the closest point to pos."""
     pos = np.asarray(pos, dtype=float)
     best_d, best_s = float("inf"), 0.0
     for i in range(len(pts) - 1):
@@ -68,7 +48,6 @@ def project_arc(pts, cum, pos) -> float:
 
 
 def point_at_arc(pts, cum, s: float):
-    """Point on the path at arc length s (clamped to the path)."""
     s = clamp(s, 0.0, cum[-1])
     for i in range(len(pts) - 1):
         if s <= cum[i + 1] or i == len(pts) - 2:
@@ -79,8 +58,6 @@ def point_at_arc(pts, cum, s: float):
 
 
 def menger_curvature(p0, p1, p2) -> float:
-    """Curvature at p1 from three points = 4*Area / (|p0p1| |p1p2| |p2p0|).
-    0 for collinear points; 1/R for points on a circle of radius R."""
     a = float(np.linalg.norm(p1 - p0))
     b = float(np.linalg.norm(p2 - p1))
     c = float(np.linalg.norm(p2 - p0))
@@ -92,15 +69,8 @@ def menger_curvature(p0, p1, p2) -> float:
 
 def speed_profile(pts, cum, a_lat: float, a_lon: float, a_brk: float,
                   v_max: float, v_min: float, v_start: float, climb_max: float = 0.0):
-    """Time-optimal speed at each path point from the physics limits.
-    Returns a list aligned with pts/cum. See module docstring for the method.
-
-    climb_max (m/s, MEASURED): if set, also cap speed so the required climb rate
-    v*|slope| never exceeds what the drone can actually climb -> the drone slows
-    on steep sections instead of lagging low and scraping the climb gates."""
     n = len(pts)
     v = [v_max] * n
-    # 1) cornering limit from local curvature  (+ optional climb-rate limit)
     for i in range(1, n - 1):
         kappa = menger_curvature(pts[i - 1], pts[i], pts[i + 1])
         if kappa > 1e-6:
@@ -112,11 +82,9 @@ def speed_profile(pts, cum, a_lat: float, a_lon: float, a_brk: float,
             if slope > 1e-3:
                 v[i] = min(v[i], climb_max / slope)
     v[0] = min(v[0], v_start)
-    # 2) forward pass: bound acceleration (can't speed up faster than a_lon)
     for i in range(1, n):
         ds = cum[i] - cum[i - 1]
         v[i] = min(v[i], math.sqrt(v[i - 1] ** 2 + 2.0 * a_lon * ds))
-    # 3) backward pass: bound braking (must slow down BEFORE the corner)
     for i in range(n - 2, -1, -1):
         ds = cum[i + 1] - cum[i]
         v[i] = min(v[i], math.sqrt(v[i + 1] ** 2 + 2.0 * a_brk * ds))
@@ -124,10 +92,6 @@ def speed_profile(pts, cum, a_lat: float, a_lon: float, a_brk: float,
 
 
 def path_curvature_vector(pts, cum, s: float, ds: float = 1.5):
-    """Horizontal curvature vector dt/ds (= kappa * unit-normal-toward-centre) at
-    arc length s, by finite-differencing the tangent. Units 1/m. Multiply by v^2
-    to get the centripetal acceleration needed to FOLLOW the path at speed v
-    (feedforward -> the controller pre-turns into a bend instead of lagging it)."""
     s0 = clamp(s - ds, 0.0, cum[-1])
     s1 = clamp(s + ds, 0.0, cum[-1])
     p_prev = point_at_arc(pts, cum, s0)
@@ -145,7 +109,6 @@ def path_curvature_vector(pts, cum, s: float, ds: float = 1.5):
 
 
 def speed_at(cum, vprof, s: float) -> float:
-    """Interpolate the speed profile at arc length s."""
     s = clamp(s, 0.0, cum[-1])
     for i in range(len(cum) - 1):
         if s <= cum[i + 1] or i == len(cum) - 2:
