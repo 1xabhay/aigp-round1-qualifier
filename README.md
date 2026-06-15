@@ -106,7 +106,6 @@ Waiting for fix; arming.
 - `src/aigp_pilot/course.py`: Round 1 gate centers.
 - `src/aigp_pilot/raceline.py`: spline path and speed profile.
 - `src/aigp_pilot/control.py`: acceleration-to-rate control cascade.
-- `src/aigp_pilot/telemetry.py`: run logging.
 
 ## Test
 

@@ -78,31 +78,6 @@ def point_at_arc(pts, cum, s: float):
     return pts[-1]
 
 
-def smooth_within_corridor(waypoints, radius, frac=1.0, iters=60, alpha=0.5):
-    """Straighten a waypoint chain WITHOUT leaving the tube. Laplacian smoothing
-    (pull each point toward the midpoint of its neighbours) clamped so no point
-    moves more than radius*frac from its original gate centre — i.e. the line may
-    cut the apex but still passes through every gate opening. Endpoints fixed.
-
-    This is the 'wind tunnel' line: fastest smooth path inside the gate borders."""
-    orig = [np.asarray(p, dtype=float) for p in waypoints]
-    pts = [p.copy() for p in orig]
-    n = len(pts)
-    lim = radius * frac
-    for _ in range(iters):
-        new = [p.copy() for p in pts]
-        for i in range(1, n - 1):
-            mid = 0.5 * (pts[i - 1] + pts[i + 1])
-            target = pts[i] + alpha * (mid - pts[i])
-            d = target - orig[i]                 # keep within the aperture of gate i
-            dn = float(np.linalg.norm(d))
-            if dn > lim:
-                target = orig[i] + d * (lim / dn)
-            new[i] = target
-        pts = new
-    return pts
-
-
 def menger_curvature(p0, p1, p2) -> float:
     """Curvature at p1 from three points = 4*Area / (|p0p1| |p1p2| |p2p0|).
     0 for collinear points; 1/R for points on a circle of radius R."""
