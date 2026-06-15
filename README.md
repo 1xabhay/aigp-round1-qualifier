@@ -1,58 +1,28 @@
 # AI-GP Round 1 Qualifier
 
-This repo is a small, faithful extraction of the AI-GP Round 1 qualifying pilot.
-It is the archived working `racecourse_smooth.py` path plus only the modules it
-needs to fly the known six-gate Round 1 course.
+Small extraction of the pilot that qualified on the AI-GP Round 1 six-gate
+course. It is intentionally simple: known gate map, measured physics, spline
+path, speed profile, rate controller.
 
-Known result from the project docs:
-
-- Config: `measured`
-- Gates: `6/6`
-- Lap time: about `24.7 s`
-- Reference time beaten: `36 s`
-
-Local verification run:
+Verified run:
 
 - Config: `measured`
 - Gates: `6/6`
-- Lap time: `24.2 s`
+- Time: `24.2 s`
 - Collisions: `0`
 
-The simulator is noisy, so live runs can vary by several seconds. The important
-first check is a clean `6/6` completion.
+Documented baseline from the project notes: about `24.7 s`, beating the `36 s`
+reference.
 
-## What It Does
+## How I Ran It
 
-The pilot does not use a neural network. It is a compact racing controller:
+The simulator ran on Windows. The pilot ran on my Mac. Because the simulator only
+sends MAVLink to `127.0.0.1`, I used `relay.py` on Windows to forward simulator
+telemetry to the Mac and send commands back.
 
-1. Uses the known Round 1 gate centers.
-2. Builds a smooth Catmull-Rom path through the gates.
-3. Computes a speed profile from measured limits.
-4. Tracks the path with a rate-control cascade.
-5. Sends MAVLink body rates and collective thrust to the simulator.
+### Windows
 
-This is useful for learning because the code is small enough to read, and each
-piece maps to a concrete racing idea.
-
-## First-Time Runbook
-
-This setup assumes the AI-GP simulator runs on Windows and the Python pilot runs
-on a Mac. The simulator sends MAVLink to localhost, so `relay.py` forwards packets
-between the Windows machine and the Mac.
-
-### 1. Find Your Mac IP
-
-On the Mac:
-
-```bash
-ipconfig getifaddr en0
-```
-
-Use that IP in the Windows relay command below.
-
-### 2. Start The Relay On Windows
-
-Put `relay.py` on the Windows machine next to the simulator, then run:
+Put `relay.py` next to the simulator and run:
 
 ```cmd
 python relay.py --mac-ip <MAC_LAN_IP>
@@ -64,37 +34,32 @@ Example:
 python relay.py --mac-ip 192.168.1.235
 ```
 
-Allow Python through Windows Firewall if prompted.
+Allow Python through Windows Firewall.
 
-### 3. Install The Pilot On Mac
+### Mac
 
-From this repo:
+Find the Mac IP:
+
+```bash
+ipconfig getifaddr en0
+```
+
+Install and start the pilot:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -e .
-```
-
-### 4. Launch The Pilot Before Starting The Race
-
-```bash
 python3 fly.py
 ```
 
-Default config is `measured`, the qualifying config.
+Then, in the simulator:
 
-Optional later-progress config:
+1. Restart the run so the drone respawns at the start line.
+2. Start the race countdown.
+3. The pilot holds through the countdown, then flies.
 
-```bash
-python3 fly.py track1
-```
-
-### 5. Start The Sim Run
-
-The pilot intentionally waits at zero throttle until it sees a fresh race start.
-
-Expected console flow:
+Expected console:
 
 ```text
 Waiting for heartbeat...
@@ -105,40 +70,24 @@ Waiting for fix; arming.
 >>> GO.
 ```
 
-Use this sequence:
+## Three Lessons From The Engine
 
-1. Start `python3 fly.py`.
-2. In the simulator, restart the run so the drone respawns at the start line.
-3. Start the race countdown.
-4. The pilot holds through the countdown, then flies.
+1. The sim is an acro/rate interface: the useful command is body rates plus
+   collective thrust, not position setpoints.
+2. Correct telemetry matters: position and velocity come from `LOCAL_POSITION_NED`;
+   using the wrong frame makes altitude and control feel haunted.
+3. A strong game agent can be physics-first: measure hover, signs, speed, climb,
+   and gate geometry, then build a controller around those numbers.
 
-## If The Drone Sits Still
+## What To Read
 
-Usually the start guard is doing its job. Restart the sim run after the pilot is
-already listening, then start the countdown.
+- `fly.py`: live Round 1 runner.
+- `src/aigp_pilot/raceconfig.py`: numeric configs, including `measured`.
+- `src/aigp_pilot/course.py`: Round 1 gate centers.
+- `src/aigp_pilot/control.py`: rate-control cascade.
+- `src/aigp_pilot/raceline.py`: path and speed profile.
 
-The pilot refuses to launch unless:
-
-- race status is available,
-- the race has not started yet,
-- active gate is `0`,
-- the drone is near ground level.
-
-That prevents building a path from a crashed or stale position.
-
-## Files
-
-- `fly.py` is the live Round 1 qualifying runner.
-- `relay.py` is the Windows localhost-to-LAN UDP bridge.
-- `src/aigp_pilot/raceconfig.py` contains `measured` and `track1`.
-- `src/aigp_pilot/course.py` contains the Round 1 gate centers.
-- `src/aigp_pilot/control.py` contains the rate cascade.
-- `src/aigp_pilot/raceline.py` contains path and speed-profile math.
-- `src/aigp_pilot/telemetry.py` and `analyze.py` record and summarize runs.
-
-## Quick Test
-
-Without the simulator:
+Quick smoke test:
 
 ```bash
 python3 -m pytest -q
