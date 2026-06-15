@@ -1,4 +1,6 @@
-# AI-GP Round 1 Qualifier
+# AI-GP Round 1 
+
+[![demo](./demo.gif)]
 
 | config | gates | time | collisions |
 |---|---:|---:|---:|
