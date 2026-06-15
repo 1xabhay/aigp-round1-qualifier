@@ -2,7 +2,7 @@
 
 | config | gates | time | collisions |
 |---|---:|---:|---:|
-| `measured` | `6/6` | `24.2 s` | `0` |
+| `measured` | `6/6` | `24.0 s` | `0` |
 
 ## Run
 
