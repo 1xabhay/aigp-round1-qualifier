@@ -1,28 +1,47 @@
 # AI-GP Round 1 Qualifier
 
-Small extraction of the pilot that qualified on the AI-GP Round 1 six-gate
-course. It is intentionally simple: known gate map, measured physics, spline
-path, speed profile, rate controller.
+An autonomous drone-racing pilot for the AI-GP Round 1 simulator.
 
-Verified run:
+This repository is an exhibition cut: the smallest useful version of the code
+that flew the six-gate qualifier. It keeps the working flight runner, the numeric
+race configuration, the course model, and the physics-based controller.
 
-- Config: `measured`
-- Gates: `6/6`
-- Time: `24.2 s`
-- Collisions: `0`
+## Result
 
-Documented baseline from the project notes: about `24.7 s`, beating the `36 s`
-reference.
+Verified local run:
 
-## How I Ran It
+| config | gates | time | collisions |
+|---|---:|---:|---:|
+| `measured` | `6/6` | `24.2 s` | `0` |
 
-The simulator ran on Windows. The pilot ran on my Mac. Because the simulator only
-sends MAVLink to `127.0.0.1`, I used `relay.py` on Windows to forward simulator
-telemetry to the Mac and send commands back.
+Project-note baseline: about `24.7 s`
 
-### Windows
+## Why It Is Interesting
 
-Put `relay.py` next to the simulator and run:
+This is not an end-to-end neural pilot. It is a compact game-agent stack built
+from measured simulator physics:
+
+1. Hard-code the known Round 1 gate centers.
+2. Build a smooth spline through the gates.
+3. Compute a speed profile from measured limits.
+4. Track the path with a rate-control cascade.
+5. Send MAVLink body rates and collective thrust to the simulator.
+
+That makes the project readable: each file maps to one racing idea.
+
+## Run It
+
+The original setup used two machines:
+
+- Windows: AI-GP simulator.
+- Mac: Python pilot.
+
+The simulator sends MAVLink only to localhost, so `relay.py` runs on Windows and
+bridges packets to the Mac.
+
+### Windows: Start The Relay
+
+Copy `relay.py` to the Windows simulator machine, then run:
 
 ```cmd
 python relay.py --mac-ip <MAC_LAN_IP>
@@ -36,7 +55,7 @@ python relay.py --mac-ip 192.168.1.235
 
 Allow Python through Windows Firewall.
 
-### Mac
+### Mac: Start The Pilot
 
 Find the Mac IP:
 
@@ -44,7 +63,7 @@ Find the Mac IP:
 ipconfig getifaddr en0
 ```
 
-Install and start the pilot:
+Install and run:
 
 ```bash
 python3 -m venv .venv
@@ -53,13 +72,13 @@ python3 -m pip install -e .
 python3 fly.py
 ```
 
-Then, in the simulator:
+Then use the simulator:
 
 1. Restart the run so the drone respawns at the start line.
 2. Start the race countdown.
-3. The pilot holds through the countdown, then flies.
+3. The pilot holds through countdown and launches at `GO`.
 
-Expected console:
+Expected pilot log:
 
 ```text
 Waiting for heartbeat...
@@ -70,24 +89,26 @@ Waiting for fix; arming.
 >>> GO.
 ```
 
-## Three Lessons From The Engine
+## Three Engine Lessons
 
-1. The sim is an acro/rate interface: the useful command is body rates plus
-   collective thrust, not position setpoints.
-2. Correct telemetry matters: position and velocity come from `LOCAL_POSITION_NED`;
-   using the wrong frame makes altitude and control feel haunted.
-3. A strong game agent can be physics-first: measure hover, signs, speed, climb,
-   and gate geometry, then build a controller around those numbers.
+- The sim is an acro/rate interface. The winning command is body rates plus
+  collective thrust, not position setpoints.
+- Frame choice matters. Position and velocity must come from `LOCAL_POSITION_NED`;
+  the wrong velocity frame breaks altitude control.
+- Physics beats guessing. Measure hover thrust, rate signs, speed, climb, and gate
+  geometry, then build the controller around those numbers.
 
-## What To Read
+## Code Map
 
-- `fly.py`: live Round 1 runner.
-- `src/aigp_pilot/raceconfig.py`: numeric configs, including `measured`.
+- `fly.py`: live flight runner and start guard.
+- `relay.py`: Windows localhost-to-LAN MAVLink bridge.
+- `src/aigp_pilot/raceconfig.py`: numeric race configs.
 - `src/aigp_pilot/course.py`: Round 1 gate centers.
-- `src/aigp_pilot/control.py`: rate-control cascade.
-- `src/aigp_pilot/raceline.py`: path and speed profile.
+- `src/aigp_pilot/raceline.py`: spline path and speed profile.
+- `src/aigp_pilot/control.py`: acceleration-to-rate control cascade.
+- `src/aigp_pilot/telemetry.py`: run logging.
 
-Quick smoke test:
+## Test
 
 ```bash
 python3 -m pytest -q
